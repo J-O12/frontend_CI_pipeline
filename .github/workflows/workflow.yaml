@@ -1,0 +1,43 @@
+name: My First Workflow
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Use Node.js 
+        uses: actions/setup-node@v3
+        with:
+          node-version: '14'  # Specify a Node.js version
+
+      - name: Install Dependencies
+        run: npm ci
+
+      # Run the linter
+      - name: Run ESLint
+        uses: wearerequired/lint-action@v2
+        with:
+          eslint: true
+
+      - name: Run Tests
+        if: success()  # Only run tests if ESLint passed
+        run: npm test
+
+      - name: Handle Linting Errors
+        if: failure()  # Run only if ESLint failed
+        run: echo "Code doesn't adhere to ESLint rules. Please check and fix the issues."
+
+
+      # - name: Handle Linting Errors
+      #   if: steps.tests.outcome != 'success'
+      #   run: echo "Code failed testing. Please check and fix the issues."
+
