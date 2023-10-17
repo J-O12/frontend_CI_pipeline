@@ -1,43 +1,92 @@
-name: My First Workflow
+name: Frontend Deployment
 
 on:
   workflow_dispatch:
-  pull_request:
+  push:
     branches:
       - main
 
 jobs:
-  build:
+  lint-and-test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Use Node.js 
-        uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '14'  # Specify a Node.js version
+          node-version: latest
 
       - name: Install Dependencies
+        working-directory: ./src
         run: npm ci
 
-      # Run the linter
-      - name: Run ESLint
-        uses: wearerequired/lint-action@v2
-        with:
-          eslint: true
+      - name: Run Lint
+        run: npm run lint .
 
-      - name: Run Tests
-        if: success()  # Only run tests if ESLint passed
+      - name: Handle Lint Errors
+        if: failure()  # Run only if lint fails
+        run: npm lint --fix .
+
+      - name: Run tests
         run: npm test
 
-      - name: Handle Linting Errors
-        if: failure()  # Run only if ESLint failed
-        run: echo "Code doesn't adhere to ESLint rules. Please check and fix the issues."
+      - name: Handle Test Errors
+        if: failure()  # Run only if tests fail
+        run: echo "Tests failed. Please check and fix the issues."
 
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      # - name: Handle Linting Errors
-      #   if: steps.tests.outcome != 'success'
-      #   run: echo "Code failed testing. Please check and fix the issues."
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
 
+      - name: Install Dependencies
+        working-directory: ./src
+        run: npm ci
+
+      - name: Build Docker image
+        run: |
+          docker build -t my-app:${{ github.sha }} .
+
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+
+      - name: AWS ECR Login
+        run: |
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+      - name: Push to AWS ECR
+        run: |
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/my-app:${{ github.sha }}
+
+      # - name: Use kubectl
+      #   uses: azure/k8s-set-context@v1
+      #   with:
+      #     method: kubeconfig
+      #     kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      # - name: Deploy to Kubernetes
+      #   run: kubectl apply -f kubernetes-manifests/
