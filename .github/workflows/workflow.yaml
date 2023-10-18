@@ -1,4 +1,3 @@
-
 name: My Workflow
 
 on:
@@ -75,9 +74,3 @@ jobs:
         working-directory: ./src
         run: npm run build
 
-
-  stage_deploy: 
-    runs-on: ubuntu-latest
-    needs: [lint, test, build]
-      environment: 
-        name: Continuous Integration
